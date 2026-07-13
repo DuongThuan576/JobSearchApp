@@ -4,7 +4,6 @@ import android.widget.ImageView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.example.jobsearchapp.R;
-import com.example.jobsearchapp.data.local.AppDatabase;
 import com.example.jobsearchapp.data.models.Applicant;
 import com.example.jobsearchapp.data.models.Application;
 import com.example.jobsearchapp.data.models.Job;
@@ -12,9 +11,12 @@ import com.example.jobsearchapp.data.models.User;
 import com.example.jobsearchapp.ui.base.BaseActivity;
 import com.example.jobsearchapp.ui.employer.adapters.ApplicantAdapter;
 import com.example.jobsearchapp.utils.SessionManager;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ViewApplicantsActivity extends BaseActivity implements ApplicantAdapter.OnApplicantActionListener {
 
@@ -23,6 +25,7 @@ public class ViewApplicantsActivity extends BaseActivity implements ApplicantAda
     private ApplicantAdapter adapter;
     private List<Applicant> applicantList = new ArrayList<>();
     private SessionManager sessionManager;
+    private FirebaseFirestore db;
 
     @Override
     protected int getLayoutId() {
@@ -34,6 +37,7 @@ public class ViewApplicantsActivity extends BaseActivity implements ApplicantAda
         rvApplicants = findViewById(R.id.rvApplicants);
         ivBack = findViewById(R.id.ivBack);
 
+        db = FirebaseFirestore.getInstance();
         sessionManager = new SessionManager(this);
 
         rvApplicants.setLayoutManager(new LinearLayoutManager(this));
@@ -44,33 +48,53 @@ public class ViewApplicantsActivity extends BaseActivity implements ApplicantAda
     }
 
     private void loadApplicants() {
-        int employerId = sessionManager.getUserId();
-        if (employerId != -1) {
-            new Thread(() -> {
-                List<Application> applications = AppDatabase.getInstance(this).applicationDao().getApplicationsForEmployer(employerId);
-                List<Applicant> applicants = new ArrayList<>();
-
-                for (Application app : applications) {
-                    User user = AppDatabase.getInstance(this).userDao().getUserById(app.getCandidateId());
-                    Job job = AppDatabase.getInstance(this).jobDao().getJobById(app.getJobId());
-
-                    if (user != null) {
-                        Applicant applicant = new Applicant();
-                        applicant.setApplicationId(app.getId());
-                        applicant.setId(String.valueOf(user.getId()));
-                        applicant.setName(user.getFullName());
-                        applicant.setEmail(user.getEmail());
-                        applicant.setJobTitle(job != null ? job.getTitle() : "N/A");
-                        applicant.setStatus(app.getStatus());
-                        applicants.add(applicant);
+        String employerId = sessionManager.getUserId();
+        if (!employerId.isEmpty()) {
+            db.collection("applications")
+                .whereEqualTo("employerId", employerId)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<Applicant> applicants = new ArrayList<>();
+                    if (queryDocumentSnapshots.isEmpty()) {
+                        adapter.updateList(applicants);
+                        return;
                     }
-                }
 
-                runOnUiThread(() -> {
-                    applicantList = applicants;
-                    adapter.updateList(applicantList);
-                });
-            }).start();
+                    AtomicInteger counter = new AtomicInteger(0);
+                    int total = queryDocumentSnapshots.size();
+
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        Application app = doc.toObject(Application.class);
+                        app.setId(doc.getId());
+
+                        // Fetch User and Job details for each application
+                        db.collection("users").document(app.getCandidateId()).get()
+                            .addOnSuccessListener(userDoc -> {
+                                User user = userDoc.toObject(User.class);
+                                db.collection("jobs").document(app.getJobId()).get()
+                                    .addOnSuccessListener(jobDoc -> {
+                                        Job job = jobDoc.toObject(Job.class);
+                                        
+                                        if (user != null) {
+                                            Applicant applicant = new Applicant();
+                                            applicant.setApplicationId(app.getId());
+                                            applicant.setId(userDoc.getId());
+                                            applicant.setName(user.getFullName());
+                                            applicant.setEmail(user.getEmail());
+                                            applicant.setJobTitle(job != null ? job.getTitle() : "N/A");
+                                            applicant.setStatus(app.getStatus());
+                                            applicants.add(applicant);
+                                        }
+
+                                        if (counter.incrementAndGet() == total) {
+                                            applicantList = applicants;
+                                            adapter.updateList(applicantList);
+                                        }
+                                    });
+                            });
+                    }
+                })
+                .addOnFailureListener(e -> showToast("Lỗi: " + e.getMessage()));
         }
     }
 
@@ -89,14 +113,13 @@ public class ViewApplicantsActivity extends BaseActivity implements ApplicantAda
         updateApplicationStatus(applicant.getApplicationId(), "Rejected");
     }
 
-    private void updateApplicationStatus(int applicationId, String status) {
-        new Thread(() -> {
-            AppDatabase.getInstance(this).applicationDao().updateStatusById(applicationId, status);
-
-            runOnUiThread(() -> {
+    private void updateApplicationStatus(String applicationId, String status) {
+        db.collection("applications").document(applicationId)
+            .update("status", status)
+            .addOnSuccessListener(aVoid -> {
                 showToast("Đã " + (status.equals("Accepted") ? "chấp nhận" : "từ chối") + " đơn ứng tuyển");
                 loadApplicants();
-            });
-        }).start();
+            })
+            .addOnFailureListener(e -> showToast("Lỗi: " + e.getMessage()));
     }
 }

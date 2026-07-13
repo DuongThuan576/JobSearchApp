@@ -36,7 +36,7 @@ public class ManageJobAdapter extends RecyclerView.Adapter<ManageJobAdapter.View
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Job job = jobList.get(position);
         holder.tvTitle.setText(job.getTitle());
-        holder.tvSalary.setText("Lương: " + job.getSalary());
+        holder.tvSalary.setText("Lương: " + job.getSalaryMin() + " - " + job.getSalaryMax());
         holder.tvLocation.setText("Địa điểm: " + job.getLocation());
 
         holder.btnDelete.setOnClickListener(v -> listener.onDelete(job));

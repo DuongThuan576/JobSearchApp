@@ -7,10 +7,17 @@ import com.example.jobsearchapp.data.local.AppDatabase;
 import com.example.jobsearchapp.data.models.User;
 import com.example.jobsearchapp.ui.base.BaseFragment;
 import com.google.android.material.button.MaterialButtonToggleGroup;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class RegisterFragment extends BaseFragment {
     private EditText edtEmail, edtPassword, edtFullName, edtPhone;
     private MaterialButtonToggleGroup toggleGroupRole;
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
 
     @Override
     protected int getLayoutId() { return R.layout.fragment_register; }
@@ -22,6 +29,9 @@ public class RegisterFragment extends BaseFragment {
         edtEmail = view.findViewById(R.id.edtEmail);
         edtPassword = view.findViewById(R.id.edtPassword);
         toggleGroupRole = view.findViewById(R.id.toggleGroupRole);
+        
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
     }
 
     @Override
@@ -39,25 +49,40 @@ public class RegisterFragment extends BaseFragment {
                 return;
             }
 
-            String role = "CANDIDATE";
+            String selectedRole = "candidate";
             if (toggleGroupRole.getCheckedButtonId() == R.id.btnRoleEmployer) {
-                role = "EMPLOYER";
+                selectedRole = "employer";
             }
+            
+            final String role = selectedRole;
 
-            try {
-                User user = new User(email, pass, fullName, role);
-                user.setPhone(phone);
-                
-                AppDatabase.getInstance(getContext()).userDao().register(user);
-                showToast("Đăng ký thành công! Hãy đăng nhập.");
-                
-                // Quay lại màn hình đăng nhập
-                if (getParentFragmentManager().getBackStackEntryCount() > 0) {
-                    getParentFragmentManager().popBackStack();
-                }
-            } catch (Exception e) {
-                showToast("Lỗi đăng ký: " + e.getMessage());
-            }
+            mAuth.createUserWithEmailAndPassword(email, pass)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        String uid = mAuth.getCurrentUser().getUid();
+                        
+                        Map<String, Object> userMap = new HashMap<>();
+                        userMap.put("userId", uid);
+                        userMap.put("fullName", fullName);
+                        userMap.put("email", email);
+                        userMap.put("phone", phone);
+                        userMap.put("role", role);
+                        userMap.put("createdAt", System.currentTimeMillis());
+                        userMap.put("status", "active");
+                        
+                        db.collection("users").document(uid)
+                            .set(userMap)
+                            .addOnSuccessListener(aVoid -> {
+                                showToast("Đăng ký thành công! Hãy đăng nhập.");
+                                if (getParentFragmentManager().getBackStackEntryCount() > 0) {
+                                    getParentFragmentManager().popBackStack();
+                                }
+                            })
+                            .addOnFailureListener(e -> showToast("Lỗi lưu thông tin: " + e.getMessage()));
+                    } else {
+                        showToast("Lỗi đăng ký: " + task.getException().getMessage());
+                    }
+                });
         });
 
         getView().findViewById(R.id.tvToLogin).setOnClickListener(v -> {

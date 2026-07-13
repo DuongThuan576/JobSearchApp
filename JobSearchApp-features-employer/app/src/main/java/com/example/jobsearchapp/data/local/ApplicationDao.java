@@ -19,18 +19,18 @@ public interface ApplicationDao {
 
     @Transaction
     @Query("SELECT * FROM applications WHERE candidateId = :candidateId ORDER BY appliedAt DESC")
-    List<ApplicationWithJob> getMyApplicationsWithJob(int candidateId);
+    List<ApplicationWithJob> getMyApplicationsWithJob(String candidateId);
 
     @Transaction
     @Query("SELECT * FROM applications WHERE candidateId = :candidateId AND status = :status ORDER BY appliedAt DESC")
-    List<ApplicationWithJob> getMyApplicationsByStatus(int candidateId, String status);
+    List<ApplicationWithJob> getMyApplicationsByStatus(String candidateId, String status);
 
     @Query("SELECT * FROM applications WHERE jobId = :jobId ORDER BY appliedAt DESC")
-    List<Application> getApplicantsForJob(int jobId);
+    List<Application> getApplicantsForJob(String jobId);
 
-    @Query("SELECT applications.* FROM applications JOIN jobs ON applications.jobId = jobs.id WHERE jobs.employerId = :employerId")
-    List<Application> getApplicationsForEmployer(int employerId);
+    @Query("SELECT * FROM applications WHERE companyId = :companyId")
+    List<Application> getApplicationsByCompany(String companyId);
 
     @Query("UPDATE applications SET status = :status WHERE id = :applicationId")
-    void updateStatusById(int applicationId, String status);
+    void updateStatusById(String applicationId, String status);
 }

@@ -5,12 +5,13 @@ import android.widget.ImageView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.example.jobsearchapp.R;
-import com.example.jobsearchapp.data.local.AppDatabase;
 import com.example.jobsearchapp.data.models.Job;
 import com.example.jobsearchapp.ui.base.BaseActivity;
 import com.example.jobsearchapp.ui.employer.adapters.ManageJobAdapter;
 import com.example.jobsearchapp.utils.SessionManager;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +24,7 @@ public class ManageJobsActivity extends BaseActivity implements ManageJobAdapter
     private ManageJobAdapter adapter;
     private List<Job> jobList = new ArrayList<>();
     private SessionManager sessionManager;
+    private FirebaseFirestore db;
 
     @Override
     protected int getLayoutId() {
@@ -35,6 +37,7 @@ public class ManageJobsActivity extends BaseActivity implements ManageJobAdapter
         ivBack = findViewById(R.id.ivBack);
         fabAddJob = findViewById(R.id.fabAddJob);
 
+        db = FirebaseFirestore.getInstance();
         sessionManager = new SessionManager(this);
 
         rvJobs.setLayoutManager(new LinearLayoutManager(this));
@@ -49,15 +52,22 @@ public class ManageJobsActivity extends BaseActivity implements ManageJobAdapter
     }
 
     private void loadJobs() {
-        int employerId = sessionManager.getUserId();
-        if (employerId != -1) {
-            new Thread(() -> {
-                List<Job> jobs = AppDatabase.getInstance(this).jobDao().getJobsByEmployer(employerId);
-                runOnUiThread(() -> {
+        String employerId = sessionManager.getUserId();
+        if (!employerId.isEmpty()) {
+            db.collection("jobs")
+                .whereEqualTo("employerId", employerId)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    List<Job> jobs = new ArrayList<>();
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        Job job = doc.toObject(Job.class);
+                        job.setId(doc.getId());
+                        jobs.add(job);
+                    }
                     jobList = jobs;
                     adapter.updateList(jobList);
-                });
-            }).start();
+                })
+                .addOnFailureListener(e -> showToast("Lỗi: " + e.getMessage()));
         }
     }
 
@@ -69,18 +79,19 @@ public class ManageJobsActivity extends BaseActivity implements ManageJobAdapter
 
     @Override
     public void onEdit(Job job) {
-        // Có thể mở rộng thêm tính năng sửa
-        showToast("Chức năng sửa đang phát triển");
+        Intent intent = new Intent(this, EditJobActivity.class);
+        intent.putExtra("JOB_DATA", job);
+        startActivity(intent);
     }
 
     @Override
     public void onDelete(Job job) {
-        new Thread(() -> {
-            AppDatabase.getInstance(this).jobDao().deleteJob(job);
-            runOnUiThread(() -> {
+        db.collection("jobs").document(job.getId())
+            .delete()
+            .addOnSuccessListener(aVoid -> {
                 showToast("Đã xóa tin tuyển dụng");
                 loadJobs();
-            });
-        }).start();
+            })
+            .addOnFailureListener(e -> showToast("Lỗi xóa: " + e.getMessage()));
     }
 }

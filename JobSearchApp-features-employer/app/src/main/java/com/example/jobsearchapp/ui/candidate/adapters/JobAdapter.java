@@ -21,9 +21,9 @@ public class JobAdapter extends RecyclerView.Adapter<JobAdapter.JobViewHolder> {
     public void sort(boolean newestFirst) {
         Collections.sort(jobList, (j1, j2) -> {
             if (newestFirst) {
-                return Long.compare(j2.getTimestamp(), j1.getTimestamp());
+                return Long.compare(j2.getPostedAt(), j1.getPostedAt());
             } else {
-                return Long.compare(j1.getTimestamp(), j2.getTimestamp());
+                return Long.compare(j1.getPostedAt(), j2.getPostedAt());
             }
         });
         notifyDataSetChanged();
@@ -42,7 +42,9 @@ public class JobAdapter extends RecyclerView.Adapter<JobAdapter.JobViewHolder> {
 
     @Override
     public int getItemViewType(int position) {
-        return jobList.get(position).isFeatured() ? TYPE_FEATURED : TYPE_REGULAR;
+        Job job = jobList.get(position);
+        boolean isActive = job.getStatus() != null && job.getStatus().equals("active");
+        return isActive && position % 5 == 0 ? TYPE_FEATURED : TYPE_REGULAR;
     }
 
     @NonNull
@@ -57,11 +59,13 @@ public class JobAdapter extends RecyclerView.Adapter<JobAdapter.JobViewHolder> {
     public void onBindViewHolder(@NonNull JobViewHolder holder, int position) {
         Job job = jobList.get(position);
         
-        // Kiểm tra an toàn trước khi gán dữ liệu để tránh NullPointerException
         if (holder.tvTitle != null) holder.tvTitle.setText(job.getTitle());
-        if (holder.tvSalary != null) holder.tvSalary.setText(job.getSalary());
+        if (holder.tvSalary != null) {
+            String salaryStr = job.getSalaryMin() + " - " + job.getSalaryMax();
+            holder.tvSalary.setText(salaryStr);
+        }
         if (holder.tvLocation != null) holder.tvLocation.setText(job.getLocation());
-        if (holder.tvCompanyName != null) holder.tvCompanyName.setText(job.getDescription());
+        if (holder.tvCompanyName != null) holder.tvCompanyName.setText(job.getCompanyName());
 
         holder.itemView.setOnClickListener(v -> {
             Intent intent = new Intent(v.getContext(), JobDetailActivity.class);
@@ -75,14 +79,23 @@ public class JobAdapter extends RecyclerView.Adapter<JobAdapter.JobViewHolder> {
         return jobList != null ? jobList.size() : 0;
     }
 
+    public void updateList(List<Job> newList) {
+        this.jobList.clear();
+        this.jobList.addAll(newList);
+        this.jobListFull = new ArrayList<>(newList);
+        notifyDataSetChanged();
+    }
+
     public void filter(String query, String typeFilter) {
         jobList.clear();
         String finalQuery = query.toLowerCase().trim();
         for (Job item : jobListFull) {
-            boolean matchesQuery = finalQuery.isEmpty() || 
-                                 item.getTitle().toLowerCase().contains(finalQuery) || 
-                                 item.getDescription().toLowerCase().contains(finalQuery);
-            boolean matchesType = typeFilter == null || item.getType().equals(typeFilter);
+            String title = item.getTitle() != null ? item.getTitle().toLowerCase() : "";
+            String desc = item.getDescription() != null ? item.getDescription().toLowerCase() : "";
+            
+            boolean matchesQuery = finalQuery.isEmpty() || title.contains(finalQuery) || desc.contains(finalQuery);
+            boolean matchesType = typeFilter == null || (item.getJobType() != null && item.getJobType().equals(typeFilter));
+
             if (matchesQuery && matchesType) {
                 jobList.add(item);
             }

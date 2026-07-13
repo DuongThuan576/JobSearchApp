@@ -15,13 +15,13 @@ public class SessionManager {
         editor = pref.edit();
     }
 
-    public void saveSession(int userId, String role) {
-        editor.putInt(KEY_USER_ID, userId);
+    public void saveSession(String userId, String role) {
+        editor.putString(KEY_USER_ID, userId);
         editor.putString(KEY_ROLE, role);
         editor.apply();
     }
 
-    public int getUserId() { return pref.getInt(KEY_USER_ID, -1); }
+    public String getUserId() { return pref.getString(KEY_USER_ID, ""); }
     public String getRole() { return pref.getString(KEY_ROLE, ""); }
 
     public void logout() {

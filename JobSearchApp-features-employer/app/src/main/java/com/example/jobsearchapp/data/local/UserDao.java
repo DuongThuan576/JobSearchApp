@@ -18,5 +18,5 @@ public interface UserDao {
     void updateProfile(User user);
 
     @Query("SELECT * FROM users WHERE id = :userId LIMIT 1")
-    User getUserById(int userId);
+    User getUserById(String userId);
 }

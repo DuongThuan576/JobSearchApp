@@ -31,7 +31,7 @@ public class MainActivity extends BaseActivity {
         ivProfile = findViewById(R.id.ivProfile);
 
         SessionManager sessionManager = new SessionManager(this);
-        if ("EMPLOYER".equals(sessionManager.getRole())) {
+        if ("employer".equalsIgnoreCase(sessionManager.getRole())) {
             bottomNavigation.getMenu().findItem(R.id.nav_apps).setVisible(false);
             bottomNavigation.getMenu().findItem(R.id.nav_search).setVisible(false);
         }

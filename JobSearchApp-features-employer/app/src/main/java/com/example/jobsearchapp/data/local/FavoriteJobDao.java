@@ -17,8 +17,8 @@ public interface FavoriteJobDao {
     void removeFromFavorite(FavoriteJob favoriteJob);
 
     @Query("SELECT jobs.* FROM jobs INNER JOIN favorite_jobs ON jobs.id = favorite_jobs.jobId WHERE favorite_jobs.userId = :userId")
-    List<Job> getFavoriteJobs(int userId);
+    List<Job> getFavoriteJobs(String userId);
 
     @Query("SELECT * FROM favorite_jobs WHERE userId = :userId AND jobId = :jobId LIMIT 1")
-    FavoriteJob getFavorite(int userId, int jobId);
+    FavoriteJob getFavorite(String userId, String jobId);
 }

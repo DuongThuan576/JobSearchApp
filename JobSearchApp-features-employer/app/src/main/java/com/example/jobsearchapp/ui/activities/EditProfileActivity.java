@@ -2,14 +2,19 @@ package com.example.jobsearchapp.ui.activities;
 
 import android.widget.EditText;
 import com.example.jobsearchapp.R;
-import com.example.jobsearchapp.data.local.AppDatabase;
 import com.example.jobsearchapp.data.models.User;
 import com.example.jobsearchapp.ui.base.BaseActivity;
 import com.example.jobsearchapp.utils.SessionManager;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class EditProfileActivity extends BaseActivity {
     private EditText edtFullName, edtPhone, edtCompany, edtProfession, edtLocation;
     private User currentUser;
+    private FirebaseFirestore db;
+    private String userId;
 
     @Override
     protected int getLayoutId() { return R.layout.candidate_activity_edit_profile; }
@@ -22,18 +27,30 @@ public class EditProfileActivity extends BaseActivity {
         edtProfession = findViewById(R.id.edtEditProfession);
         edtLocation = findViewById(R.id.edtEditLocation);
         
+        db = FirebaseFirestore.getInstance();
         SessionManager sessionManager = new SessionManager(this);
-        int userId = sessionManager.getUserId();
+        userId = sessionManager.getUserId();
         
-        // Lấy thông tin người dùng từ DB để điền vào các ô
-        currentUser = AppDatabase.getInstance(this).userDao().getUserById(userId);
-        if (currentUser != null) {
-            edtFullName.setText(currentUser.getFullName());
-            edtPhone.setText(currentUser.getPhone());
-            edtCompany.setText(currentUser.getCompanyName());
-            edtProfession.setText(currentUser.getProfession());
-            edtLocation.setText(currentUser.getLocation());
-        }
+        loadUserData();
+    }
+
+    private void loadUserData() {
+        if (userId == null || userId.isEmpty()) return;
+        
+        db.collection("users").document(userId).get()
+            .addOnSuccessListener(documentSnapshot -> {
+                if (documentSnapshot.exists()) {
+                    currentUser = documentSnapshot.toObject(User.class);
+                    if (currentUser != null) {
+                        edtFullName.setText(currentUser.getFullName());
+                        edtPhone.setText(currentUser.getPhone());
+                        edtCompany.setText(currentUser.getCompanyName());
+                        edtProfession.setText(currentUser.getProfession());
+                        edtLocation.setText(currentUser.getLocation());
+                    }
+                }
+            })
+            .addOnFailureListener(e -> showToast("Lỗi tải dữ liệu: " + e.getMessage()));
     }
 
     @Override
@@ -41,23 +58,39 @@ public class EditProfileActivity extends BaseActivity {
         findViewById(R.id.ivBackEdit).setOnClickListener(v -> finish());
         
         findViewById(R.id.btnSaveProfile).setOnClickListener(v -> {
-            if (currentUser != null) {
-                // Lấy dữ liệu mới từ giao diện
-                currentUser.setFullName(edtFullName.getText().toString().trim());
-                currentUser.setPhone(edtPhone.getText().toString().trim());
-                currentUser.setCompanyName(edtCompany.getText().toString().trim());
-                currentUser.setProfession(edtProfession.getText().toString().trim());
-                currentUser.setLocation(edtLocation.getText().toString().trim());
+            if (userId != null && !userId.isEmpty()) {
+                String fullName = edtFullName.getText().toString().trim();
+                String phone = edtPhone.getText().toString().trim();
+                String company = edtEditCompanyVisible() ? edtCompany.getText().toString().trim() : "";
+                String profession = edtProfession.getText().toString().trim();
+                String location = edtLocation.getText().toString().trim();
+
+                if (fullName.isEmpty()) {
+                    showToast("Họ tên không được để trống");
+                    return;
+                }
+
+                Map<String, Object> updates = new HashMap<>();
+                updates.put("fullName", fullName);
+                updates.put("phone", phone);
+                updates.put("companyName", company);
+                updates.put("profession", profession);
+                updates.put("location", location);
                 
-                // Cập nhật vào Database
-                AppDatabase.getInstance(this).userDao().updateProfile(currentUser);
-                showToast("Cập nhật thành công");
-                
-                // Đóng Activity ngay lập tức để quay về trang trước
-                finish(); 
+                db.collection("users").document(userId)
+                    .update(updates)
+                    .addOnSuccessListener(aVoid -> {
+                        showToast("Cập nhật thành công");
+                        finish();
+                    })
+                    .addOnFailureListener(e -> showToast("Lỗi cập nhật: " + e.getMessage()));
             } else {
-                showToast("Lỗi: Không tìm thấy tài khoản để cập nhật");
+                showToast("Lỗi: Không tìm thấy ID người dùng");
             }
         });
+    }
+
+    private boolean edtEditCompanyVisible() {
+        return edtCompany.getVisibility() == android.view.View.VISIBLE;
     }
 }

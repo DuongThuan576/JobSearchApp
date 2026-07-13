@@ -16,6 +16,10 @@ import com.example.jobsearchapp.ui.base.BaseFragment;
 import com.example.jobsearchapp.ui.candidate.adapters.JobAdapter;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
+
+import java.util.ArrayList;
 import java.util.List;
 
 public class SearchFragment extends BaseFragment {
@@ -26,6 +30,8 @@ public class SearchFragment extends BaseFragment {
     private TextView tvResultCount, tvSort;
     private String currentTypeFilter = null;
     private String initialQuery = null;
+    private FirebaseFirestore db;
+    private List<Job> allJobs = new ArrayList<>();
 
     @Override
     protected int getLayoutId() {
@@ -47,13 +53,11 @@ public class SearchFragment extends BaseFragment {
         tvResultCount = view.findViewById(R.id.tvResultCount);
         tvSort = view.findViewById(R.id.tvSort);
         
+        db = FirebaseFirestore.getInstance();
+
         setupRecyclerView();
         setupChips(view);
-
-        if (initialQuery != null && edtSearch != null) {
-            edtSearch.setText(initialQuery);
-            performSearch();
-        }
+        loadJobsFromFirebase();
     }
 
     private void setupChips(View view) {
@@ -124,11 +128,27 @@ public class SearchFragment extends BaseFragment {
     }
 
     private void setupRecyclerView() {
-        List<Job> jobs = AppDatabase.getInstance(getContext()).jobDao().getAllJobs();
-
-        adapter = new JobAdapter(jobs);
+        adapter = new JobAdapter(new ArrayList<>());
         rvSearchResults.setLayoutManager(new LinearLayoutManager(getContext()));
         rvSearchResults.setAdapter(adapter);
-        updateResultCount(adapter.getItemCount());
+    }
+
+    private void loadJobsFromFirebase() {
+        db.collection("jobs")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    allJobs.clear();
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        Job job = doc.toObject(Job.class);
+                        job.setId(doc.getId());
+                        allJobs.add(job);
+                    }
+                    adapter.updateList(allJobs);
+                    
+                    if (initialQuery != null && edtSearch != null) {
+                        edtSearch.setText(initialQuery);
+                        performSearch();
+                    }
+                });
     }
 }

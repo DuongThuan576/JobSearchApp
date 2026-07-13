@@ -40,8 +40,8 @@ public class AppliedJobsFragment extends BaseFragment {
     }
 
     private void loadApplications() {
-        int userId = sessionManager.getUserId();
-        if (userId != -1) {
+        String userId = sessionManager.getUserId();
+        if (!userId.isEmpty()) {
             allApplications = AppDatabase.getInstance(getContext()).applicationDao().getMyApplicationsWithJob(userId);
             adapter.setData(allApplications);
         } else {

@@ -1,16 +1,13 @@
 package com.example.jobsearchapp.ui.activities;
 
 import android.content.Intent;
-import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
-
 import com.example.jobsearchapp.R;
-import com.example.jobsearchapp.data.local.AppDatabase;
-import com.example.jobsearchapp.data.models.User;
 import com.example.jobsearchapp.ui.base.BaseActivity;
 import com.example.jobsearchapp.utils.SessionManager;
 import com.google.android.material.card.MaterialCardView;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 public class EmployerActivity extends BaseActivity {
 
@@ -18,6 +15,7 @@ public class EmployerActivity extends BaseActivity {
     private ImageView ivLogout;
     private TextView tvWelcomeName;
     private SessionManager sessionManager;
+    private FirebaseFirestore db;
 
     @Override
     protected int getLayoutId() {
@@ -32,19 +30,21 @@ public class EmployerActivity extends BaseActivity {
         ivLogout = findViewById(R.id.ivLogout);
         tvWelcomeName = findViewById(R.id.tvWelcomeName);
 
+        db = FirebaseFirestore.getInstance();
         sessionManager = new SessionManager(this);
         loadUserInfo();
     }
 
     private void loadUserInfo() {
-        int userId = sessionManager.getUserId();
-        if (userId != -1) {
-            new Thread(() -> {
-                User user = AppDatabase.getInstance(this).userDao().getUserById(userId);
-                if (user != null) {
-                    runOnUiThread(() -> tvWelcomeName.setText("Chào, " + user.getFullName() + "!"));
-                }
-            }).start();
+        String userId = sessionManager.getUserId();
+        if (!userId.isEmpty()) {
+            db.collection("users").document(userId).get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        String fullName = documentSnapshot.getString("fullName");
+                        tvWelcomeName.setText("Chào, " + fullName + "!");
+                    }
+                });
         }
     }
 

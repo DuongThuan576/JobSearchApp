@@ -10,7 +10,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import com.example.jobsearchapp.R;
-import com.example.jobsearchapp.data.local.AppDatabase;
 import com.example.jobsearchapp.data.models.User;
 import com.example.jobsearchapp.ui.activities.AuthActivity;
 import com.example.jobsearchapp.ui.activities.EditProfileActivity;
@@ -21,6 +20,10 @@ import com.example.jobsearchapp.ui.base.BaseFragment;
 import com.example.jobsearchapp.utils.SessionManager;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class ProfileFragment extends BaseFragment {
     private TextView tvName, tvEmail, tvProfession, tvLocation, tvCvName, tvEmployerWelcome;
@@ -28,6 +31,7 @@ public class ProfileFragment extends BaseFragment {
     private ChipGroup cgProfileSkills;
     private SessionManager sessionManager;
     private User currentUser;
+    private FirebaseFirestore db;
 
     private final ActivityResultLauncher<String> cvPickerLauncher = registerForActivityResult(
             new ActivityResultContracts.GetContent(),
@@ -39,7 +43,6 @@ public class ProfileFragment extends BaseFragment {
 
     @Override
     protected void initViews(View view) {
-        // Views cho Candidate
         tvName = view.findViewById(R.id.tvProfileName);
         tvEmail = view.findViewById(R.id.tvProfileEmail);
         tvProfession = view.findViewById(R.id.tvProfileProfession);
@@ -50,10 +53,10 @@ public class ProfileFragment extends BaseFragment {
         layoutCvItem = view.findViewById(R.id.layout_cv_item);
         cgProfileSkills = view.findViewById(R.id.cgProfileSkills);
 
-        // Views cho Employer
         layoutEmployerDashboard = view.findViewById(R.id.layout_employer_dashboard);
         tvEmployerWelcome = view.findViewById(R.id.tvEmployerWelcome);
 
+        db = FirebaseFirestore.getInstance();
         sessionManager = new SessionManager(getContext());
     }
 
@@ -64,58 +67,53 @@ public class ProfileFragment extends BaseFragment {
     }
 
     private void checkLoginStatus() {
-        int userId = sessionManager.getUserId();
+        String userId = sessionManager.getUserId();
         String role = sessionManager.getRole();
 
-        if (userId == -1) {
+        if (userId.isEmpty()) {
             layoutGuest.setVisibility(View.VISIBLE);
             layoutLoggedIn.setVisibility(View.GONE);
             layoutEmployerDashboard.setVisibility(View.GONE);
         } else {
             layoutGuest.setVisibility(View.GONE);
-            if ("EMPLOYER".equals(role)) {
-                layoutLoggedIn.setVisibility(View.GONE);
-                layoutEmployerDashboard.setVisibility(View.VISIBLE);
-                loadEmployerData(userId);
-            } else {
-                layoutLoggedIn.setVisibility(View.VISIBLE);
-                layoutEmployerDashboard.setVisibility(View.GONE);
-                loadUserData(userId);
-            }
+            loadUserData(userId, role);
         }
     }
 
-    private void loadEmployerData(int userId) {
-        new Thread(() -> {
-            currentUser = AppDatabase.getInstance(getContext()).userDao().getUserById(userId);
-            if (currentUser != null && getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    tvEmployerWelcome.setText("Chào, " + currentUser.getFullName() + "!");
-                });
-            }
-        }).start();
+    private void loadUserData(String userId, String role) {
+        db.collection("users").document(userId).get()
+            .addOnSuccessListener(documentSnapshot -> {
+                if (documentSnapshot.exists()) {
+                    currentUser = documentSnapshot.toObject(User.class);
+                    if (currentUser != null) {
+                        currentUser.setId(documentSnapshot.getId());
+                        if ("employer".equalsIgnoreCase(role)) {
+                            layoutLoggedIn.setVisibility(View.GONE);
+                            layoutEmployerDashboard.setVisibility(View.VISIBLE);
+                            tvEmployerWelcome.setText("Chào, " + currentUser.getFullName() + "!");
+                        } else {
+                            layoutLoggedIn.setVisibility(View.VISIBLE);
+                            layoutEmployerDashboard.setVisibility(View.GONE);
+                            displayCandidateData();
+                        }
+                    }
+                }
+            });
     }
 
-    private void loadUserData(int userId) {
-        new Thread(() -> {
-            currentUser = AppDatabase.getInstance(getContext()).userDao().getUserById(userId);
-            if (currentUser != null && getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    tvName.setText(currentUser.getFullName());
-                    tvEmail.setText(currentUser.getEmail());
-                    tvProfession.setText(currentUser.getProfession());
-                    tvLocation.setText(currentUser.getLocation());
+    private void displayCandidateData() {
+        tvName.setText(currentUser.getFullName());
+        tvEmail.setText(currentUser.getEmail());
+        tvProfession.setText(currentUser.getProfession());
+        tvLocation.setText(currentUser.getLocation());
 
-                    if (currentUser.getCvPath() != null && !currentUser.getCvPath().isEmpty()) {
-                        layoutCvItem.setVisibility(View.VISIBLE);
-                        tvCvName.setText(currentUser.getCvPath());
-                    } else {
-                        layoutCvItem.setVisibility(View.GONE);
-                    }
-                    loadSkills(currentUser.getSkills());
-                });
-            }
-        }).start();
+        if (currentUser.getCvPath() != null && !currentUser.getCvPath().isEmpty()) {
+            layoutCvItem.setVisibility(View.VISIBLE);
+            tvCvName.setText(currentUser.getCvPath());
+        } else {
+            layoutCvItem.setVisibility(View.GONE);
+        }
+        loadSkills(currentUser.getSkills());
     }
 
     private void loadSkills(String skillsStr) {
@@ -135,29 +133,26 @@ public class ProfileFragment extends BaseFragment {
     private void handleSelectedCV(Uri uri) {
         if (currentUser == null) return;
         String fileName = uri.getLastPathSegment();
-        currentUser.setCvPath(fileName);
-        new Thread(() -> {
-            AppDatabase.getInstance(getContext()).userDao().updateProfile(currentUser);
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    loadUserData(currentUser.getId());
-                    showToast("Đã tải lên CV thành công");
-                });
-            }
-        }).start();
+        
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("cvPath", fileName);
+        
+        db.collection("users").document(currentUser.getId())
+            .update(updates)
+            .addOnSuccessListener(aVoid -> {
+                showToast("Đã cập nhật CV thành công");
+                loadUserData(currentUser.getId(), sessionManager.getRole());
+            });
     }
 
     private void addSkill(String skill) {
         if (currentUser == null) return;
         String current = currentUser.getSkills();
         String updated = (current == null || current.isEmpty()) ? skill : current + "," + skill;
-        currentUser.setSkills(updated);
-        new Thread(() -> {
-            AppDatabase.getInstance(getContext()).userDao().updateProfile(currentUser);
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> loadUserData(currentUser.getId()));
-            }
-        }).start();
+        
+        db.collection("users").document(currentUser.getId())
+            .update("skills", updated)
+            .addOnSuccessListener(aVoid -> loadUserData(currentUser.getId(), sessionManager.getRole()));
     }
 
     private void removeSkill(String skill) {
@@ -169,23 +164,16 @@ public class ProfileFragment extends BaseFragment {
                 sb.append(s.trim());
             }
         }
-        currentUser.setSkills(sb.toString());
-        new Thread(() -> {
-            AppDatabase.getInstance(getContext()).userDao().updateProfile(currentUser);
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> loadUserData(currentUser.getId()));
-            }
-        }).start();
+        db.collection("users").document(currentUser.getId())
+            .update("skills", sb.toString())
+            .addOnSuccessListener(aVoid -> loadUserData(currentUser.getId(), sessionManager.getRole()));
     }
 
     @Override
     protected void initListeners() {
         if (getView() == null) return;
 
-        // Listeners cho Guest
         getView().findViewById(R.id.btnGoToAuth).setOnClickListener(v -> startActivity(new Intent(getActivity(), AuthActivity.class)));
-
-        // Listeners cho Candidate
         getView().findViewById(R.id.btnUploadCV).setOnClickListener(v -> cvPickerLauncher.launch("*/*"));
         getView().findViewById(R.id.btnEditProfile).setOnClickListener(v -> startActivity(new Intent(getActivity(), EditProfileActivity.class)));
         getView().findViewById(R.id.btnLogout).setOnClickListener(v -> logout());
@@ -198,7 +186,6 @@ public class ProfileFragment extends BaseFragment {
                     }).setNegativeButton("Hủy", null).show();
         });
 
-        // Listeners cho Employer
         getView().findViewById(R.id.cardPostJob).setOnClickListener(v -> startActivity(new Intent(getActivity(), PostJobActivity.class)));
         getView().findViewById(R.id.cardManageJob).setOnClickListener(v -> startActivity(new Intent(getActivity(), ManageJobsActivity.class)));
         getView().findViewById(R.id.cardApplicants).setOnClickListener(v -> startActivity(new Intent(getActivity(), ViewApplicantsActivity.class)));

@@ -52,5 +52,9 @@
             android:name=".ui.activities.EditProfileActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ui.activities.EditJobActivity"
+            android:exported="false" />
+
     </application>
 </manifest>

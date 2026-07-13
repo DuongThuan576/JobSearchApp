@@ -2,63 +2,72 @@ package com.example.jobsearchapp.data.models;
 
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
+import androidx.annotation.NonNull;
 import java.io.Serializable;
 
 @Entity(tableName = "users")
 public class User implements Serializable {
-    @PrimaryKey(autoGenerate = true)
-    private int id;
+    @PrimaryKey
+    @NonNull
+    private String id; // userId
     private String email;
-    private String password;
     private String fullName;
-    private String role; 
     private String phone;
-    private String avatarPath;
-    private String companyName; 
-    private String cvPath; 
-    
-    // Các trường mới theo giao diện
-    private String profession; // Ví dụ: Chuyên viên phát triển phần mềm
-    private String location;   // Ví dụ: TP. Hồ Chí Minh
-    private String skills;     // Lưu dạng chuỗi cách nhau bởi dấu phẩy
-    private String experience; // Lưu thông tin kinh nghiệm làm việc
+    private String avatarUrl;
+    private String role; // "candidate" / "employer" / "admin"
+    private long createdAt;
+    private String status; // "active" / "banned"
+    private String companyName;
+    private String profession;
+    private String location;
+    private String cvPath;
+    private String skills;
+    private String password;
 
-    public User() {}
+    public User() {
+        this.id = java.util.UUID.randomUUID().toString();
+        this.createdAt = System.currentTimeMillis();
+        this.status = "active";
+    }
 
-    public User(String email, String password, String fullName, String role) {
+    public User(String id, String email, String fullName, String role) {
+        this.id = id;
         this.email = email;
-        this.password = password;
         this.fullName = fullName;
         this.role = role;
-        this.profession = "Chuyên viên phát triển phần mềm";
-        this.location = "TP. Hồ Chí Minh";
+        this.createdAt = System.currentTimeMillis();
+        this.status = "active";
     }
 
     // Getters and Setters
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
+    @NonNull
+    public String getId() { return id; }
+    public void setId(@NonNull String id) { this.id = id; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
-    public String getPassword() { return password; }
-    public void setPassword(String password) { this.password = password; }
     public String getFullName() { return fullName; }
     public void setFullName(String fullName) { this.fullName = fullName; }
-    public String getRole() { return role; }
-    public void setRole(String role) { this.role = role; }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
-    public String getAvatarPath() { return avatarPath; }
-    public void setAvatarPath(String avatarPath) { this.avatarPath = avatarPath; }
+    public String getAvatarUrl() { return avatarUrl; }
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+    public long getCreatedAt() { return createdAt; }
+    public void setCreatedAt(long createdAt) { this.createdAt = createdAt; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
     public String getCompanyName() { return companyName; }
     public void setCompanyName(String companyName) { this.companyName = companyName; }
-    public String getCvPath() { return cvPath; }
-    public void setCvPath(String cvPath) { this.cvPath = cvPath; }
     public String getProfession() { return profession; }
     public void setProfession(String profession) { this.profession = profession; }
     public String getLocation() { return location; }
     public void setLocation(String location) { this.location = location; }
+    public String getCvPath() { return cvPath; }
+    public void setCvPath(String cvPath) { this.cvPath = cvPath; }
     public String getSkills() { return skills; }
     public void setSkills(String skills) { this.skills = skills; }
-    public String getExperience() { return experience; }
-    public void setExperience(String experience) { this.experience = experience; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
 }

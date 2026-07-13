@@ -3,7 +3,7 @@ package com.example.jobsearchapp.data.models;
 import java.io.Serializable;
 
 public class Applicant implements Serializable {
-    private int applicationId;
+    private String applicationId;
     private String id;
     private String name;
     private String email;
@@ -14,8 +14,8 @@ public class Applicant implements Serializable {
 
     public Applicant() {}
 
-    public int getApplicationId() { return applicationId; }
-    public void setApplicationId(int applicationId) { this.applicationId = applicationId; }
+    public String getApplicationId() { return applicationId; }
+    public void setApplicationId(String applicationId) { this.applicationId = applicationId; }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }

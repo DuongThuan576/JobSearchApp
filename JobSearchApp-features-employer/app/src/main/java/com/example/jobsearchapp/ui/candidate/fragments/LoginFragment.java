@@ -4,15 +4,16 @@ import android.content.Intent;
 import android.view.View;
 import android.widget.EditText;
 import com.example.jobsearchapp.R;
-import com.example.jobsearchapp.data.local.AppDatabase;
-import com.example.jobsearchapp.data.models.User;
-import com.example.jobsearchapp.ui.activities.EmployerActivity;
 import com.example.jobsearchapp.ui.activities.MainActivity;
 import com.example.jobsearchapp.ui.base.BaseFragment;
 import com.example.jobsearchapp.utils.SessionManager;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 public class LoginFragment extends BaseFragment {
     private EditText edtEmail, edtPassword;
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
 
     @Override
     protected int getLayoutId() { return R.layout.fragment_login; }
@@ -21,6 +22,9 @@ public class LoginFragment extends BaseFragment {
     protected void initViews(View view) {
         edtEmail = view.findViewById(R.id.edtEmailLogin);
         edtPassword = view.findViewById(R.id.edtPasswordLogin);
+        
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
     }
 
     @Override
@@ -36,18 +40,15 @@ public class LoginFragment extends BaseFragment {
                 return;
             }
 
-            // Lấy user từ DB
-            User user = AppDatabase.getInstance(getContext()).userDao().login(email, pass);
-            if (user != null) {
-                // LƯU ID THẬT CỦA USER VÀO SESSION
-                new SessionManager(getContext()).saveSession(user.getId(), user.getRole());
-
-                Intent intent = new Intent(getActivity(), MainActivity.class);
-                startActivity(intent);
-                if (getActivity() != null) getActivity().finish();
-            } else {
-                showToast("Sai email hoặc mật khẩu");
-            }
+            mAuth.signInWithEmailAndPassword(email, pass)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        String uid = mAuth.getCurrentUser().getUid();
+                        fetchUserAndNavigate(uid);
+                    } else {
+                        showToast("Sai email hoặc mật khẩu hoặc lỗi hệ thống");
+                    }
+                });
         });
 
         getView().findViewById(R.id.tvToRegister).setOnClickListener(v -> {
@@ -56,5 +57,22 @@ public class LoginFragment extends BaseFragment {
                     .addToBackStack(null)
                     .commit();
         });
+    }
+
+    private void fetchUserAndNavigate(String uid) {
+        db.collection("users").document(uid).get()
+            .addOnSuccessListener(documentSnapshot -> {
+                if (documentSnapshot.exists()) {
+                    String role = documentSnapshot.getString("role");
+                    new SessionManager(getContext()).saveSession(uid, role);
+
+                    Intent intent = new Intent(getActivity(), MainActivity.class);
+                    startActivity(intent);
+                    if (getActivity() != null) getActivity().finish();
+                } else {
+                    showToast("Không tìm thấy dữ liệu người dùng");
+                }
+            })
+            .addOnFailureListener(e -> showToast("Lỗi: " + e.getMessage()));
     }
 }

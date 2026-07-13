@@ -16,6 +16,10 @@ import com.example.jobsearchapp.ui.candidate.adapters.JobAdapter;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,6 +29,11 @@ public class HomeFragment extends BaseFragment {
     private ChipGroup cgTrending;
     private EditText edtSearch;
     private TextView tvViewAllCategories;
+    private FirebaseFirestore db;
+    private JobAdapter jobAdapter;
+    private CategoryAdapter categoryAdapter;
+    private List<Job> jobList = new ArrayList<>();
+    private List<Category> categoryList = new ArrayList<>();
 
     @Override
     protected int getLayoutId() {
@@ -38,27 +47,23 @@ public class HomeFragment extends BaseFragment {
         cgTrending = view.findViewById(R.id.cgTrending);
         edtSearch = view.findViewById(R.id.edtSearch);
         tvViewAllCategories = view.findViewById(R.id.tvViewAllCategories);
+
+        db = FirebaseFirestore.getInstance();
         
         setupCategories();
         setupRecyclerView();
         setupTrendingKeywords();
+        loadJobsFromFirebase();
     }
 
     private void setupCategories() {
-        List<Category> categoryList = new ArrayList<>();
-        categoryList.add(new Category("Công nghệ", android.R.drawable.ic_menu_today));
-        categoryList.add(new Category("Tiếp thị", android.R.drawable.ic_menu_send));
-        categoryList.add(new Category("Kinh doanh", android.R.drawable.ic_menu_agenda));
-        categoryList.add(new Category("Thiết kế", android.R.drawable.ic_menu_edit));
-
-        CategoryAdapter adapter = new CategoryAdapter(categoryList, category -> {
-            // Khi nhấn vào một danh mục -> Chuyển sang Tìm kiếm với từ khóa đó
+        categoryAdapter = new CategoryAdapter(categoryList, category -> {
             if (getActivity() instanceof MainActivity) {
                 ((MainActivity) getActivity()).navigateToSearch(category.getName());
             }
         });
         rvCategories.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
-        rvCategories.setAdapter(adapter);
+        rvCategories.setAdapter(categoryAdapter);
     }
 
     private void setupTrendingKeywords() {
@@ -80,10 +85,60 @@ public class HomeFragment extends BaseFragment {
     }
 
     private void setupRecyclerView() {
-        List<Job> jobs = AppDatabase.getInstance(getContext()).jobDao().getAllJobs();
-        JobAdapter adapter = new JobAdapter(jobs);
+        jobAdapter = new JobAdapter(jobList);
         rvJobsMain.setLayoutManager(new LinearLayoutManager(getContext()));
-        rvJobsMain.setAdapter(adapter);
+        rvJobsMain.setAdapter(jobAdapter);
+    }
+
+    private void loadJobsFromFirebase() {
+        db.collection("jobs")
+                .orderBy("postedAt", Query.Direction.DESCENDING)
+                .limit(50) // Tăng giới hạn để lấy được nhiều danh mục hơn
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    jobList.clear();
+                    java.util.Set<String> uniqueCategories = new java.util.HashSet<>();
+                    
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        Job job = doc.toObject(Job.class);
+                        job.setId(doc.getId());
+                        jobList.add(job);
+                        
+                        if (job.getCategory() != null && !job.getCategory().isEmpty()) {
+                            uniqueCategories.add(job.getCategory());
+                        }
+                    }
+                    
+                    updateCategoryUI(uniqueCategories);
+                    jobAdapter.notifyDataSetChanged();
+                });
+    }
+
+    private void updateCategoryUI(java.util.Set<String> categories) {
+        categoryList.clear();
+        for (String catName : categories) {
+            int iconRes = getIconForCategory(catName);
+            categoryList.add(new Category(catName, iconRes));
+        }
+        categoryAdapter.notifyDataSetChanged();
+    }
+
+    private int getIconForCategory(String category) {
+        String lower = category.toLowerCase();
+        if (lower.contains("it") || lower.contains("công nghệ") || lower.contains("phần mềm")) 
+            return android.R.drawable.ic_menu_today;
+        if (lower.contains("marketing") || lower.contains("tiếp thị")) 
+            return android.R.drawable.ic_menu_send;
+        if (lower.contains("kinh doanh") || lower.contains("sales")) 
+            return android.R.drawable.ic_menu_agenda;
+        if (lower.contains("thiết kế") || lower.contains("design")) 
+            return android.R.drawable.ic_menu_edit;
+        if (lower.contains("nhân sự") || lower.contains("hr")) 
+            return android.R.drawable.ic_menu_myplaces;
+        if (lower.contains("kế toán") || lower.contains("tài chính")) 
+            return android.R.drawable.ic_menu_view;
+        
+        return android.R.drawable.ic_menu_directions; // Icon mặc định
     }
 
     @Override

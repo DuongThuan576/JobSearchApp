@@ -3,21 +3,22 @@ package com.example.jobsearchapp.ui.activities;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
-
 import com.example.jobsearchapp.R;
-import com.example.jobsearchapp.data.local.AppDatabase;
-import com.example.jobsearchapp.data.models.Job;
-import com.example.jobsearchapp.data.models.User;
 import com.example.jobsearchapp.ui.base.BaseActivity;
+import com.example.jobsearchapp.utils.DataSeedHelper;
 import com.example.jobsearchapp.utils.SessionManager;
+import com.google.firebase.firestore.FirebaseFirestore;
+import java.util.HashMap;
+import java.util.Map;
 
 public class PostJobActivity extends BaseActivity {
 
     private EditText edtJobName, edtSalary, edtLocation, edtDescription;
-    private Button btnSave;
+    private EditText edtJobType, edtCategory, edtExperience, edtQuantity, edtDeadline, edtRequirements, edtBenefits;
+    private Button btnSave, btnBulkUpload;
     private ImageView ivBack;
     private SessionManager sessionManager;
-    private User currentUser;
+    private FirebaseFirestore db;
 
     @Override
     protected int getLayoutId() {
@@ -30,60 +31,91 @@ public class PostJobActivity extends BaseActivity {
         edtSalary = findViewById(R.id.edtSalary);
         edtLocation = findViewById(R.id.edtLocation);
         edtDescription = findViewById(R.id.edtDescription);
+        edtJobType = findViewById(R.id.edtJobType);
+        edtCategory = findViewById(R.id.edtCategory);
+        edtExperience = findViewById(R.id.edtExperience);
+        edtQuantity = findViewById(R.id.edtQuantity);
+        edtDeadline = findViewById(R.id.edtDeadline);
+        edtRequirements = findViewById(R.id.edtRequirements);
+        edtBenefits = findViewById(R.id.edtBenefits);
         btnSave = findViewById(R.id.btnSave);
+        btnBulkUpload = findViewById(R.id.btnBulkUpload);
         ivBack = findViewById(R.id.ivBack);
 
+        db = FirebaseFirestore.getInstance();
         sessionManager = new SessionManager(this);
-        loadUserInfo();
-    }
-
-    private void loadUserInfo() {
-        int userId = sessionManager.getUserId();
-        if (userId != -1) {
-            new Thread(() -> {
-                currentUser = AppDatabase.getInstance(this).userDao().getUserById(userId);
-            }).start();
-        }
     }
 
     @Override
     protected void initListeners() {
         ivBack.setOnClickListener(v -> finish());
 
+        if (btnBulkUpload != null) {
+            btnBulkUpload.setOnClickListener(v -> {
+                DataSeedHelper.pushMockJobsToFirebase(this);
+            });
+        }
+
         btnSave.setOnClickListener(v -> {
             String jobTitle = edtJobName.getText().toString().trim();
-            String salary = edtSalary.getText().toString().trim();
+            String salaryStr = edtSalary.getText().toString().trim();
             String location = edtLocation.getText().toString().trim();
             String description = edtDescription.getText().toString().trim();
+            String jobType = edtJobType.getText().toString().trim();
+            String category = edtCategory.getText().toString().trim();
+            String experience = edtExperience.getText().toString().trim();
+            String quantityStr = edtQuantity.getText().toString().trim();
+            String deadline = edtDeadline.getText().toString().trim();
+            String requirements = edtRequirements.getText().toString().trim();
+            String benefits = edtBenefits.getText().toString().trim();
 
-            if (jobTitle.isEmpty() || salary.isEmpty() || location.isEmpty()) {
+            if (jobTitle.isEmpty() || salaryStr.isEmpty() || location.isEmpty()) {
                 showToast("Vui lòng điền đầy đủ các trường bắt buộc");
                 return;
             }
 
-            if (currentUser == null) {
-                showToast("Lỗi xác thực người dùng");
+            long salary = 0;
+            try {
+                salary = Long.parseLong(salaryStr);
+            } catch (Exception e) {}
+
+            int quantity = 1;
+            try {
+                quantity = Integer.parseInt(quantityStr);
+            } catch (Exception e) {}
+
+            String userId = sessionManager.getUserId();
+            if (userId.isEmpty()) {
+                showToast("Lỗi xác thực");
                 return;
             }
 
-            Job job = new Job(
-                    currentUser.getId(),
-                    jobTitle,
-                    salary,
-                    location,
-                    currentUser.getCompanyName() != null ? currentUser.getCompanyName() : "Công ty chưa cập nhật",
-                    "Toàn thời gian",
-                    false
-            );
-            job.setDescription(description);
+            Map<String, Object> job = new HashMap<>();
+            job.put("companyId", userId);
+            job.put("employerId", userId); // Thêm trường này để đồng bộ với ManageJobsActivity
+            job.put("title", jobTitle);
+            job.put("salaryMin", salary);
+            job.put("salaryMax", salary);
+            job.put("location", location);
+            job.put("description", description);
+            job.put("jobType", jobType);
+            job.put("category", category);
+            job.put("experienceRequired", experience);
+            job.put("quantity", quantity);
+            job.put("deadline", deadline);
+            job.put("requirements", requirements);
+            job.put("benefits", benefits);
+            job.put("postedAt", System.currentTimeMillis());
+            job.put("status", "active");
+            job.put("views", 0);
 
-            new Thread(() -> {
-                AppDatabase.getInstance(this).jobDao().insertJob(job);
-                runOnUiThread(() -> {
+            db.collection("jobs")
+                .add(job)
+                .addOnSuccessListener(documentReference -> {
                     showToast("Đăng tin thành công!");
                     finish();
-                });
-            }).start();
+                })
+                .addOnFailureListener(e -> showToast("Lỗi: " + e.getMessage()));
         });
     }
 }
